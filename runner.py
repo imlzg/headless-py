@@ -8,7 +8,16 @@ from pyppeteer.page import Page
 
 
 async def req_callback(request):
-    print("[request] {0} {1}".format(request.method, request.url))
+    print("[request] {0} {1}...".format(request.method, request.url[:100]))
+
+async def fail_callback(request):
+    response = request.response
+    try:
+        text_content = await response.buffer()
+    except Exception as e:
+        text_content = "No dice"
+        print(e)
+    print("[fail] {0} {1} {2}".format(request.method, request.url, text_content[:10]))
 
 
 async def fin_callback(request):
@@ -32,16 +41,29 @@ async def err_callback(*args, **kwargs):
     print("[err] {0} {1}".format(args, kwargs))
 
 
+async def res_callback(*args, **kwargs):
+    print("[res] {0} {1}".format(args, kwargs))
+
+
 async def main(browser):
     page = await browser.newPage()
     page.on(NetworkManager.Events.Request, req_callback)
     page.on(NetworkManager.Events.RequestFinished, fin_callback)
+    # page.on(NetworkManager.Events.RequestFailed, fail_callback)
+    # page.on(NetworkManager.Events.Response, res_callback)
     page.on(Page.Events.SecurityStateChanged, security_callback)
     page.on('error', err_callback)
 
+    # Allow downloading of binaries
+    await page._client.send('Page.setDownloadBehavior', {'behavior': 'allow', 'downloadPath': '/tmp/'})
+
     await page.setViewport({'width': 1920, 'height': 1080})
-    await page.goto('https://msn.com/', {'timeout': 10000, 'networkIdleTimeout': 10000})
-    await page.screenshot({'path': 'screenshot.png'})
+    try:
+        await page.goto('http://pilate.es/red1', {'timeout': 10000, 'networkIdleTimeout': 10000})
+        screenshot = await page.screenshot(type="png", fullPage=True)
+        print("Screenshot: {0}".format(screenshot[:10]))
+    except Exception as e:
+        print("[main] Failed {0}".format(e))
 
 
 browser = launch()
