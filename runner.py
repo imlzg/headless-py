@@ -1,5 +1,7 @@
+from pathlib import Path
 import asyncio
 import logging
+import os
 
 from pyppeteer.launcher import launch
 from pyppeteer.network_manager import NetworkManager
@@ -10,14 +12,17 @@ from pyppeteer.page import Page
 async def req_callback(request):
     print("[request] {0} {1}...".format(request.method, request.url[:100]))
 
+
 async def fail_callback(request):
     response = request.response
-    try:
-        text_content = await response.buffer()
-    except Exception as e:
-        text_content = "No dice"
-        print(e)
-    print("[fail] {0} {1} {2}".format(request.method, request.url, text_content[:10]))
+
+    req_filename = Path("/tmp") / request.url.rsplit("/", 1)[1]
+    if req_filename.exists:
+        import hashlib
+        file_hash = hashlib.md5(open(req_filename, "rb").read()).hexdigest()
+        print("[fail] Found requested file on disk: {0} ({1})".format(req_filename, file_hash))
+    else:
+        print("[fail] {0} {1}".format(request.method, request.url))
 
 
 async def fin_callback(request):
@@ -49,7 +54,7 @@ async def main(browser):
     page = await browser.newPage()
     page.on(NetworkManager.Events.Request, req_callback)
     page.on(NetworkManager.Events.RequestFinished, fin_callback)
-    # page.on(NetworkManager.Events.RequestFailed, fail_callback)
+    page.on(NetworkManager.Events.RequestFailed, fail_callback)
     # page.on(NetworkManager.Events.Response, res_callback)
     page.on(Page.Events.SecurityStateChanged, security_callback)
     page.on('error', err_callback)
